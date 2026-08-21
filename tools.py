@@ -1,5 +1,8 @@
 import json
 import numpy as np
+import re
+
+_INDEX_CACHE = None
 
 def get_order_status(order_id: str) -> dict:
     """
@@ -42,11 +45,15 @@ def search_knowledge_base(query: str, client, top_k: int = 5) -> list:
     Embeds the query and searches the in-memory index for relevant policy chunks.
     Boosts active documents over legacy ones.
     """
-    try:
-        with open("index.json", "r", encoding="utf-8") as f:
-            documents = json.load(f)
-    except FileNotFoundError:
-        return [{"error": "Knowledge base index not found. Please notify the system administrator."}]
+    global _INDEX_CACHE
+    if _INDEX_CACHE is None:
+        try:
+            with open("index.json", "r", encoding="utf-8") as f:
+                _INDEX_CACHE = json.load(f)
+        except FileNotFoundError:
+            return [{"error": "Knowledge base index not found. Please notify the system administrator."}]
+            
+    documents = _INDEX_CACHE
         
     try:
         response = client.models.embed_content(
@@ -72,6 +79,10 @@ def search_knowledge_base(query: str, client, top_k: int = 5) -> list:
             similarity += 0.05
         elif status == "legacy" or status == "superseded":
             similarity -= 0.05
+            
+        # Strongly downrank internal/scratchpad documents
+        if doc["metadata"].get("customer_answering") == False:
+            similarity -= 1.0
             
         results.append({
             "filename": doc["filename"],

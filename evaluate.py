@@ -85,6 +85,31 @@ def run_evaluation():
                 if match_count / len(words) < 0.3:
                     passed = False
                     failures.append(f"Likely missing concept: '{concept}'")
+                    
+        for concept in expect.get("must_not_invent", []):
+            words = [w.lower() for w in concept.split() if len(w) > 4]
+            if words:
+                match_count = sum(1 for w in words if w in final_response.lower())
+                if match_count / len(words) >= 0.5:
+                    passed = False
+                    failures.append(f"Likely invented concept: '{concept}'")
+                    
+        for question in expect.get("must_ask_for", []):
+            if question.lower() not in final_response.lower():
+                passed = False
+                failures.append(f"Failed to ask for required info: '{question}'")
+                
+        # Check handoff
+        if "handoff" in expect:
+            handoff_keywords = ["human", "support", "agent", "representative", "contact", "team"]
+            has_handoff = any(k in final_response.lower() for k in handoff_keywords)
+            if expect["handoff"] and not has_handoff:
+                passed = False
+                failures.append("Expected handoff to human support, but none detected.")
+            elif not expect["handoff"] and has_handoff:
+                # Optionally enforce no-handoff, though maybe not strict. 
+                # The assignment usually says "should not handoff" if it can answer.
+                pass
 
         # Check tool calls
         tool_expect = expect.get("tool", "")
@@ -99,6 +124,18 @@ def run_evaluation():
         elif tool_expect == "not_called_without_id" and "lookup_order" in tools_called:
             passed = False
             failures.append(f"Called lookup_order without an ID provided by user: {tools_called}")
+            
+        tool_args_expect = expect.get("tool_arguments", {})
+        for t_name, expected_args in tool_args_expect.items():
+            found_call = next((t for t in trace["tools_called"] if t["name"] == t_name), None)
+            if not found_call:
+                passed = False
+                failures.append(f"Expected tool '{t_name}' to be called with arguments {expected_args}, but it was not called.")
+            else:
+                for k, v in expected_args.items():
+                    if found_call["args"].get(k) != v:
+                        passed = False
+                        failures.append(f"Tool '{t_name}' expected argument {k}='{v}', got '{found_call['args'].get(k)}'")
             
         if passed:
             print("PASS")

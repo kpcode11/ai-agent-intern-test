@@ -21,6 +21,16 @@ def main():
             response = agent.send_message(user_input)
             print(f"\nAgent: {response}")
             
+            trace = agent.last_trace
+            if trace.get("sources_used"):
+                print("\n[Sources cited:]")
+                for s in sorted(list(set(trace["sources_used"]))):
+                    print(f"  - {s}")
+                    
+            handoff_keywords = ["human", "support", "agent", "representative", "contact", "team"]
+            if any(k in response.lower() for k in handoff_keywords):
+                print("\n[Flag: Handoff Recommended]")
+            
         except KeyboardInterrupt:
             break
         except Exception as e:
