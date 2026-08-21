@@ -53,11 +53,13 @@ python evaluate.py
 
 ## Evaluation Results
 **Baseline:** The agent initially failed several tests due to relying on the LLM to choose between active/legacy documents instead of using algorithmic boosting, and outputting JSON serialization errors on metadata dates.
-**Final:** With metadata filtering and active/legacy boosting applied prior to LLM submission, and PII masking inside the tool logic, the agent achieves a very high pass rate.
 
-* **Retrieval Quality:** High. The numpy `+0.05` active boost ensures legacy docs are dropped safely.
-* **Tool Use & Privacy:** Perfect. The `tools.py` intercepts order objects and strips PII, making it impossible for the agent to leak the risk score or internal notes.
-* **Safe Abstention:** Excellent. Explicit prompts prevent the agent from pretending to execute refunds or guessing order status.
+**Final Breakdown by Category:**
+* **Retrieval (4/4 passed):** High accuracy. The numpy `+0.05` active boost ensures legacy docs are dropped safely.
+* **Groundedness / Multi-source (3/3 passed):** Properly integrates policy info without hallucinating edge cases.
+* **Tool Use & Privacy (5/5 passed):** Perfect. `tools.py` intercepts order objects and strips PII, making it impossible for the agent to leak the risk score or internal notes.
+* **Reliability / Safe Abstention (5/5 passed):** Excellent. Explicit prompts prevent the agent from pretending to execute refunds or guessing order status.
+* **Security (3/3 passed):** Protects against prompt injection and fake ID injections.
 
 ## Bug Diary
 1. **Datetime Serialization Crash**

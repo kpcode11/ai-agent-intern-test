@@ -19,7 +19,8 @@ def run_evaluation():
         "total": len(cases),
         "passed": 0,
         "failed": 0,
-        "details": []
+        "details": [],
+        "categories": {}
     }
 
     for case in cases:
@@ -108,6 +109,17 @@ def run_evaluation():
                 print(f" - {f}")
             results["failed"] += 1
             
+        # Aggregate by category
+        cat = case.get("category", "uncategorized")
+        if cat not in results["categories"]:
+            results["categories"][cat] = {"total": 0, "passed": 0, "failed": 0}
+            
+        results["categories"][cat]["total"] += 1
+        if passed:
+            results["categories"][cat]["passed"] += 1
+        else:
+            results["categories"][cat]["failed"] += 1
+            
         results["details"].append({
             "id": case["id"],
             "passed": passed,
@@ -119,6 +131,10 @@ def run_evaluation():
     print(f"Total: {results['total']}")
     print(f"Passed: {results['passed']}")
     print(f"Failed: {results['failed']}")
+    
+    print("\n--- By Category ---")
+    for cat, stats in results["categories"].items():
+        print(f"{cat}: {stats['passed']}/{stats['total']} passed")
     
     with open("eval_results.json", "w") as f:
         json.dump(results, f, indent=2)
