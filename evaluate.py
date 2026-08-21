@@ -1,15 +1,20 @@
 import json
 from agent import Agent
 
-def run_evaluation(cases_file="evaluation/visible-cases.json"):
-    try:
-        with open(cases_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        print(f"Could not find {cases_file}")
-        return
-
-    cases = data.get("cases", [])
+def run_evaluation():
+    import glob
+    case_files = glob.glob("evaluation/*.json")
+    
+    all_cases = []
+    for f_path in case_files:
+        try:
+            with open(f_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                all_cases.extend(data.get("cases", []))
+        except FileNotFoundError:
+            pass
+            
+    cases = all_cases
     results = {
         "total": len(cases),
         "passed": 0,
