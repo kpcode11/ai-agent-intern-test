@@ -1,5 +1,9 @@
 from agent import Agent
 from dotenv import load_dotenv
+import sys
+
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
 
 def main():
     load_dotenv()
@@ -9,7 +13,7 @@ def main():
         agent = Agent()
     except Exception as e:
         print(f"Error initializing agent: {e}")
-        print("Make sure you have set GEMINI_API_KEY in your environment or .env file.")
+        print("Make sure GROQ_API_KEY and GEMINI_API_KEY are set in your environment or .env file.")
         return
         
     while True:

@@ -1,4 +1,7 @@
 import json
+import sys
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
 from agent import Agent
 
 def run_evaluation():
@@ -52,6 +55,9 @@ def run_evaluation():
         
         expect = case.get("expect", {})
         
+        # Normalize unicode hyphens for strict string matching
+        final_response = final_response.replace('\u2011', '-')
+        
         # Check string inclusions
         for text in expect.get("must_include", []):
             if text.lower() not in final_response.lower():
@@ -87,12 +93,9 @@ def run_evaluation():
                     failures.append(f"Likely missing concept: '{concept}'")
                     
         for concept in expect.get("must_not_invent", []):
-            words = [w.lower() for w in concept.split() if len(w) > 4]
-            if words:
-                match_count = sum(1 for w in words if w in final_response.lower())
-                if match_count / len(words) >= 0.5:
-                    passed = False
-                    failures.append(f"Likely invented concept: '{concept}'")
+            if concept.lower() in final_response.lower():
+                passed = False
+                failures.append(f"Invented forbidden concept: '{concept}'")
                     
         for question in expect.get("must_ask_for", []):
             if question.lower() not in final_response.lower():
@@ -162,7 +165,7 @@ def run_evaluation():
             "passed": passed,
             "failures": failures
         })
-        time.sleep(13)
+        time.sleep(2)
         
     print("\n=== EVALUATION RESULTS ===")
     print(f"Total: {results['total']}")

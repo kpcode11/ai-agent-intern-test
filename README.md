@@ -2,12 +2,10 @@
 
 This repository contains a reliable RAG (Retrieval-Augmented Generation) AI support agent for Aster & Row. It is designed to handle realistic data-quality problems including superseded content, internal notes, conflicting active sources, and data privacy.
 
-![Agent Demo](file:///C:/Users/praja/.gemini/antigravity-ide/brain/aa48423b-d2e5-41af-923c-e8175fe9833f/agent_demo_1787312536599.jpg)
-
 ## Architecture
-- **Model:** `gemini-flash-latest` (using Gemini API).
-- **Embeddings:** `gemini-embedding-2` (using Gemini API).
-- **Framework:** Vanilla Python `google-genai` SDK. No heavy frameworks (like LangChain) are used to keep the system minimal, understandable, and highly reliable.
+- **Model:** `llama-3.3-70b-versatile` via Groq (chat + tool calling).
+- **Embeddings:** `gemini-embedding-2` (Gemini API). Used only for indexing and retrieval, not for generating answers.
+- **Framework:** Vanilla Python with the Groq OpenAI-compatible API and `google-genai` for embeddings. No heavy frameworks (like LangChain) are used to keep the system minimal, understandable, and highly reliable.
 - **Storage/Vector DB:** Numpy arrays serialized to `index.json`. A simple cosine similarity function is used to rank chunks. Active documents receive a `+0.05` similarity boost while superseded ones receive `-0.05` to enforce document precedence natively.
 
 ## Features
@@ -28,10 +26,12 @@ This repository contains a reliable RAG (Retrieval-Augmented Generation) AI supp
    # source venv/bin/activate
    pip install -r requirements.txt
    ```
-3. Copy `.env.example` to `.env` and insert your Gemini API Key:
+3. Copy `.env.example` to `.env` and insert your keys:
    ```bash
    cp .env.example .env
    ```
+   - `GROQ_API_KEY` — chat / tool-calling model
+   - `GEMINI_API_KEY` — embeddings only (`indexer.py` and retrieval)
 4. Run the indexer to generate the vector embeddings in `index.json`:
    ```bash
    python indexer.py
@@ -49,7 +49,7 @@ The evaluation suite runs the agent against 20 cases (15 visible + 5 custom secu
 ```bash
 python evaluate.py
 ```
-*Note: Depending on your Gemini API tier, you may encounter rate limits (e.g., 20 requests/day or 5 requests/min). The evaluation suite automatically retries and adds delays to avoid 429 quota exhaustion errors.*
+*Note: Chat uses Groq (higher free throughput). Embeddings still use Gemini, so `python indexer.py` can hit Gemini embedding quotas. The evaluation suite retries failed API calls.*
 
 ## Evaluation Results
 **Baseline:** The agent initially failed several tests due to relying on the LLM to choose between active/legacy documents instead of using algorithmic boosting, and outputting JSON serialization errors on metadata dates.
@@ -80,10 +80,10 @@ python evaluate.py
 
 ## Known Limitations & Production Improvements
 - **Storage:** `index.json` is loaded into memory entirely. For production, we should move to a vector DB (Pinecone, pgvector) to support millions of documents.
-- **LLM Selection & Rate limits:** Currently relying on Gemini Flash. In production, we'd want fallback models (e.g., Groq Llama 3) to prevent downtime when hitting rate limits.
+- **LLM Selection & Rate limits:** Chat uses Groq Llama 3.3 70B. Embeddings still use Gemini. In production, add a second chat fallback if Groq is unavailable.
 - **Semantic search quality:** Using basic cosine similarity. Using a more advanced chunking strategy, hybrid search (BM25 + vector), or a cross-encoder reranker would improve retrieval recall for nuanced questions.
 - **Tool Scaling:** `orders.json` is loaded into memory on each call. We'd need to replace this with a real backend API integration (e.g., Shopify/OMS API).
 
 ## AI Tools Used
-- Used Gemini/Antigravity Agent to scaffold the initial `indexer.py`, `tools.py`, `agent.py`, and `evaluate.py`.
-- **Bad Suggestion Example:** The AI originally suggested relying purely on the LLM's system prompt to enforce "Don't leak internal notes." This is unreliable against prompt injection; I manually enforced data masking at the tool level (in `tools.py`) to guarantee the LLM never even sees the internal notes.
+- **Google Antigravity IDE (Agentic AI Assistant):** Used heavily to write boilerplate code, architect the multi-turn agent logic, and build the initial deterministic tests.
+- **Example of incorrect suggestion:** When migrating to the Groq API, the AI model erroneously rewrote the entire agent using a generic OpenAI object instantiation `OpenAI(...)` which threw a `NameError` since it missed the import, instead of utilizing the `Groq` class instantiation natively as requested.
