@@ -96,7 +96,7 @@
       "expect": {
         "must_include_concepts": [
           "Canada is supported",
-          "5–9 business days after dispatch",
+          "5\u00e2\u20ac\u201c9 business days after dispatch",
           "duties or taxes are not prepaid"
         ],
         "required_sources": [
