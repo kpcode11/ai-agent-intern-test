@@ -1,89 +1,112 @@
 # Aster & Row AI Support Agent
 
-This repository contains a reliable RAG (Retrieval-Augmented Generation) AI support agent for Aster & Row. It is designed to handle realistic data-quality problems including superseded content, internal notes, conflicting active sources, and data privacy.
+RAG support agent for Aster & Row. It answers from the supplied knowledge base, looks up mock orders through a sanitized tool, and is built to handle superseded policies, internal notes, source conflicts, and PII.
+
+A 2–4 minute demo GIF/video still needs to be recorded and embedded here. The rest of the assignment artifacts are in this repository.
 
 ## Architecture
-- **Model:** `llama-3.3-70b-versatile` via Groq (chat + tool calling).
-- **Embeddings:** `gemini-embedding-2` (Gemini API). Used only for indexing and retrieval, not for generating answers.
-- **Framework:** Vanilla Python with the Groq OpenAI-compatible API and `google-genai` for embeddings. No heavy frameworks (like LangChain) are used to keep the system minimal, understandable, and highly reliable.
-- **Storage/Vector DB:** Numpy arrays serialized to `index.json`. A simple cosine similarity function is used to rank chunks. Active documents receive a `+0.05` similarity boost while superseded ones receive `-0.05` to enforce document precedence natively.
 
-## Features
-- **Retrieval-Augmented Generation:** Splits markdown files by headings, parsing YAML frontmatter to preserve metadata.
-- **Source Citation:** The agent is strictly prompted to append source citations (filename + heading) to claims.
-- **Order Lookup Tool:** A deterministic python function fetches from `orders.json` but masks all PII (email, address) and internal notes before providing it to the agent.
-- **Multi-turn:** Keeps track of session context.
-- **Observability:** Writes detailed debug traces to `agent_trace.log` covering the exact prompts, tools called, retrieved documents, and results.
+User messages go through a Groq chat model with two tools: `retrieve_policy` and `lookup_order`. Retrieval embeds the query, ranks markdown chunks with cosine similarity, boosts active policy documents, and **drops** documents marked `customer_answering: false`. Order lookup never sends `orders.json` to the model; it returns only customer-safe fields. Session messages stay in memory for multi-turn follow-ups. Each evaluation case starts a new `Agent()` so sessions do not mix.
 
-## Setup Instructions
-1. Clone this repository and `cd` into it.
-2. Set up a virtual environment and install dependencies:
-   ```bash
-   python -m venv venv
-   # Windows:
-   venv\Scripts\activate
-   # Mac/Linux:
-   # source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. Copy `.env.example` to `.env` and insert your keys:
-   ```bash
-   cp .env.example .env
-   ```
-   - `GROQ_API_KEY` — chat / tool-calling model
-   - `GEMINI_API_KEY` — embeddings only (`indexer.py` and retrieval)
-4. Run the indexer to generate the vector embeddings in `index.json`:
-   ```bash
-   python indexer.py
-   ```
+- **Chat model:** `llama-3.3-70b-versatile` on Groq (override with `GROQ_MODEL`).
+- **Embeddings:** `gemini-embedding-2` (indexing and retrieval only).
+- **Framework:** Vanilla Python (`groq` + `google-genai`). No LangChain.
+- **Index:** `index.json` (numpy vectors). Active `+0.05`, legacy/superseded/draft `-0.05`.
 
-## Running the Agent
-Run the interactive command-line interface:
+## Setup
+
+```bash
+python -m venv venv
+# Windows:
+venv\Scripts\activate
+# Mac/Linux:
+# source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+Set in `.env`:
+
+- `GROQ_API_KEY` — chat and tool calling
+- `GEMINI_API_KEY` — embeddings for `indexer.py` and retrieval
+- `GROQ_MODEL` — optional; default `llama-3.3-70b-versatile`
+
+```bash
+python indexer.py
+```
+
+## Run
+
 ```bash
 python cli.py
 ```
-*Note: A detailed trace log will be written to `agent_trace.log` during your session.*
 
-## Running the Evaluation Suite
-The evaluation suite runs the agent against 20 cases (15 visible + 5 custom security edge cases).
+The CLI prints the answer, retrieved sources, and a handoff flag when human help is recommended. Traces go to `agent_trace.log` (user message, conversation history, retrieved passages with metadata and scores, sanitized tool results, final response, errors/handoffs).
+
+## Tests and evaluation
+
+Deterministic tests (no LLM):
+
+```bash
+pytest test_tools.py test_eval_checks.py -q
+```
+
+Behavior evaluation against all 15 visible cases plus 5 custom cases:
+
 ```bash
 python evaluate.py
 ```
-*Note: Chat uses Groq (higher free throughput). Embeddings still use Gemini, so `python indexer.py` can hit Gemini embedding quotas. The evaluation suite retries failed API calls.*
 
-## Evaluation Results
-**Baseline:** The agent initially failed several tests due to relying on the LLM to choose between active/legacy documents instead of using algorithmic boosting, and outputting JSON serialization errors on metadata dates.
+The suite prints each case, then totals by category (`retrieval`, `conversation`, `tool-use`, `privacy`, and so on). It writes `eval_results.json`. Assertions are deterministic: required/forbidden strings, sources, tool names, tool arguments, refusals, conflict surfacing, and abstention. Another LLM is not used to grade.
 
-**Final Breakdown by Category:**
-* **Retrieval (4/4 passed):** High accuracy. The numpy `+0.05` active boost ensures legacy docs are dropped safely.
-* **Groundedness / Multi-source (3/3 passed):** Properly integrates policy info without hallucinating edge cases.
-* **Tool Use & Privacy (5/5 passed):** Perfect. `tools.py` intercepts order objects and strips PII, making it impossible for the agent to leak the risk score or internal notes.
-* **Reliability / Safe Abstention (5/5 passed):** Excellent. Explicit prompts prevent the agent from pretending to execute refunds or guessing order status.
-* **Security (3/3 passed):** Protects against prompt injection and fake ID injections.
+Chat uses Groq. Embeddings still use Gemini, so indexing and retrieval can hit Gemini embedding quotas.
 
-## Bug Diary
-1. **Datetime Serialization Crash**
-   - **Reproduction:** Running `indexer.py` generated a `TypeError` when serializing `effective_date`.
-   - **Root Cause:** PyYAML parsed `effective_date` strings as `datetime.date` objects, which `json.dump` couldn't handle natively.
-   - **Change:** Updated `json.dump(documents, f, default=str)` to cast dates to strings automatically.
-   - **Test:** `indexer.py` now successfully creates `index.json`.
-2. **PII Leakage in Tool Call**
-   - **Reproduction:** Asking "What is the internal note for ORD-1007?"
-   - **Root Cause:** The `lookup_order` tool initially passed the full parsed JSON object directly to the LLM. The system prompt told the LLM to ignore it, but the LLM sometimes leaked it anyway.
-   - **Change:** Modified `tools.py` to pop the `internal` and `customer` objects before returning the string to the agent.
-   - **Test:** The custom edge case `order-data-privacy` now passes 100% of the time.
-3. **Gemini Free-Tier Rate Limits (429 & 503)**
-   - **Reproduction:** Running `evaluate.py` which fires 20 multi-turn requests in rapid succession.
-   - **Root Cause:** The Gemini API has a 5 RPM and 20 RPD free-tier limit for `gemini-3.7-flash` or `gemini-flash-latest`. The script ran too fast and crashed.
-   - **Change:** Switched to a robust `time.sleep(13)` between evaluations, increased retry limits, and added exponential backoff handling in `evaluate.py`.
-   - **Test:** `evaluate.py` now successfully avoids 429 errors during the test run.
+## Evaluation results
 
-## Known Limitations & Production Improvements
-- **Storage:** `index.json` is loaded into memory entirely. For production, we should move to a vector DB (Pinecone, pgvector) to support millions of documents.
-- **LLM Selection & Rate limits:** Chat uses Groq Llama 3.3 70B. Embeddings still use Gemini. In production, add a second chat fallback if Groq is unavailable.
-- **Semantic search quality:** Using basic cosine similarity. Using a more advanced chunking strategy, hybrid search (BM25 + vector), or a cross-encoder reranker would improve retrieval recall for nuanced questions.
-- **Tool Scaling:** `orders.json` is loaded into memory on each call. We'd need to replace this with a real backend API integration (e.g., Shopify/OMS API).
+**Baseline (early Gemini chat + prompt-only privacy/precedence):** indexer crashed on YAML dates; order tool leaked `internal` to the model; eval treated `tool_arguments.order_id` as a tool name; custom cases used `content` instead of `messages` and would crash `evaluate.py`.
 
-## AI Tools Used
-- **Google Antigravity IDE (Agentic AI Assistant):** Used heavily to write boilerplate code, architect the multi-turn agent logic, and build the initial deterministic tests.
-- **Example of incorrect suggestion:** When migrating to the Groq API, the AI model erroneously rewrote the entire agent using a generic OpenAI object instantiation `OpenAI(...)` which threw a `NameError` since it missed the import, instead of utilizing the `Groq` class instantiation natively as requested.
+**After the current fixes (deterministic layer):**
+
+| Check | Result |
+|---|---|
+| Order lookup privacy, ID normalization, stale ETA stripping | Covered by `test_tools.py` |
+| Internal docs excluded from retrieval; active docs ranked above legacy | Covered by `test_tools.py` |
+| Visible + custom cases load (20 cases); flat `tool_arguments` maps to `lookup_order` | Covered by `test_eval_checks.py` |
+
+**LLM behavior eval (`python evaluate.py`):** re-run after Groq + tighter assertions and paste category totals here. Do not treat older “20/20” README numbers as current; those used incomplete graders.
+
+## Bug diary
+
+1. **Datetime serialization crash**
+   - **Reproduction:** `python indexer.py`
+   - **Root cause:** PyYAML parsed `effective_date` as `datetime.date`; `json.dump` could not serialize it.
+   - **Change:** `json.dump(..., default=str)` in `indexer.py`.
+   - **Regression:** indexer completes; dates stored as strings in `index.json`.
+
+2. **PII leakage through the order tool**
+   - **Reproduction:** “What is the internal note / email / name for ORD-1007?”
+   - **Root cause:** The full order object (including `customer` and `internal`) was passed to the model. The system prompt was not enough.
+   - **Change:** `get_order_status` now returns only the customer-safe field whitelist from the data dictionary (no name, email, address, or `internal`).
+   - **Regression:** `test_get_order_status_valid` and `order-data-privacy` / `custom-pii-check`.
+
+3. **Eval suite did not actually assert tool arguments or custom cases**
+   - **Reproduction:** `python evaluate.py` with `evaluation/custom-cases.json`; inspect `valid-order-lookup`.
+   - **Root cause:** Custom cases used `content` instead of `messages` (`KeyError`). Visible cases set `"tool_arguments": {"order_id": "ORD-1007"}`, but the grader treated `order_id` as a tool name.
+   - **Change:** `eval_checks.py` normalizes cases and maps flat `tool_arguments` to `lookup_order`.
+   - **Regression:** `test_flat_tool_arguments_map_to_lookup_order`, `test_load_visible_and_custom_cases`.
+
+## Known limitations
+
+- Demo GIF/video is not in the README yet.
+- Embeddings still depend on Gemini; chat no longer does.
+- `index.json` is in-memory. A vector DB would be needed at larger scale.
+- Cosine similarity only; hybrid search or a reranker would improve recall.
+- LLM eval quality still depends on Groq tool-calling. Tightened assertions may fail some paraphrases; that is preferred to a rubber-stamp grader.
+- Order data is a static JSON file, lookup-only. The agent must not claim refunds or cancellations were completed.
+
+Before production: add an identity check beyond “has an order ID”, a real OMS API, fallback chat models, and red-team tests for prompt injection.
+
+## AI tools used
+
+- Cursor / Antigravity agents for scaffolding indexer, tools, agent loop, and eval.
+- **Wrong suggestion:** relying on the system prompt alone to hide internal notes, and treating `tool_arguments` keys as tool names. Privacy is enforced in `tools.py`; argument checks live in `eval_checks.py`.

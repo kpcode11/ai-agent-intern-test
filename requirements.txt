@@ -1,5 +1,6 @@
 google-genai>=0.4.0
-openai
+groq
 numpy
 pyyaml
 python-dotenv
+pytest

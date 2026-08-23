@@ -1,49 +1,65 @@
 import json
-import numpy as np
 import re
 
+import numpy as np
+
 _INDEX_CACHE = None
+
+CUSTOMER_SAFE_FIELDS = {
+    "order_id",
+    "membership_tier",
+    "items",
+    "placed_at",
+    "status",
+    "status_updated_at",
+    "shipped_at",
+    "delivered_at",
+    "carrier",
+    "tracking_number",
+    "estimated_delivery",
+    "customer_safe_message",
+}
+
+ITEM_SAFE_FIELDS = {"name", "quantity", "final_sale", "sku"}
+
 
 def get_order_status(order_id: str) -> dict:
     """
     Looks up an order by ID and returns its status and details.
-    Removes internal fields and PII before returning.
+    Never returns customer PII or internal fields.
     """
     if not order_id:
         return {"error": "order_id is required."}
-        
-    order_id = order_id.strip().upper()
+
+    order_id = re.sub(r"[^A-Za-z0-9-]", "", order_id.strip()).upper()
     try:
         with open("data/orders.json", "r", encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         return {"error": "Order database not found. Cannot look up orders."}
-        
+
     for order in data.get("orders", []):
         if order.get("order_id", "").upper() == order_id:
-            safe_order = json.loads(json.dumps(order))
-            
-            if "customer" in safe_order:
-                safe_order["customer"].pop("email", None)
-                safe_order["customer"].pop("shipping_address", None)
-                
-            safe_order.pop("internal", None)
-            
-            # Avoid reporting stale delivery fields for cancelled or returned orders
+            safe_order = {key: order.get(key) for key in CUSTOMER_SAFE_FIELDS if key in order}
+            items = []
+            for item in order.get("items") or []:
+                items.append({key: item.get(key) for key in ITEM_SAFE_FIELDS if key in item})
+            safe_order["items"] = items
+
             if safe_order.get("status") in ["cancelled", "returned"]:
                 safe_order["carrier"] = None
                 safe_order["tracking_number"] = None
                 safe_order["estimated_delivery"] = None
-                
+
             return safe_order
-            
+
     return {"error": f"Order {order_id} not found."}
 
 
 def search_knowledge_base(query: str, client, top_k: int = 5) -> list:
     """
     Embeds the query and searches the in-memory index for relevant policy chunks.
-    Boosts active documents over legacy ones.
+    Boosts active documents over legacy ones and excludes internal-only docs.
     """
     global _INDEX_CACHE
     if _INDEX_CACHE is None:
@@ -52,55 +68,58 @@ def search_knowledge_base(query: str, client, top_k: int = 5) -> list:
                 _INDEX_CACHE = json.load(f)
         except FileNotFoundError:
             return [{"error": "Knowledge base index not found. Please notify the system administrator."}]
-            
+
     documents = _INDEX_CACHE
-        
+
     try:
         response = client.models.embed_content(
-            model='gemini-embedding-2',
-            contents=query
+            model="gemini-embedding-2",
+            contents=query,
         )
         query_embedding = np.array(response.embeddings[0].values)
     except Exception as e:
         return [{"error": f"Failed to embed query: {e}"}]
-        
+
     results = []
     for doc in documents:
+        metadata = doc.get("metadata") or {}
+        if metadata.get("customer_answering") is False:
+            continue
+
         doc_emb = np.array(doc["embedding"])
-        # Cosine similarity
         norm = np.linalg.norm(query_embedding) * np.linalg.norm(doc_emb)
         if norm == 0:
             continue
-            
+
         similarity = np.dot(query_embedding, doc_emb) / norm
-        
-        status = doc["metadata"].get("status", "")
+
+        status = metadata.get("status", "")
         if status == "active":
             similarity += 0.05
-        elif status == "legacy" or status == "superseded":
+        elif status in ("legacy", "superseded", "draft"):
             similarity -= 0.05
-            
-        # Strongly downrank internal/scratchpad documents
-        if doc["metadata"].get("customer_answering") == False:
-            similarity -= 1.0
-            
-        results.append({
-            "filename": doc["filename"],
-            "heading": doc["heading"],
-            "content": doc["content"],
-            "metadata": doc["metadata"],
-            "similarity": float(similarity)
-        })
-        
+
+        results.append(
+            {
+                "filename": doc["filename"],
+                "heading": doc["heading"],
+                "content": doc["content"],
+                "metadata": metadata,
+                "similarity": float(similarity),
+            }
+        )
+
     results.sort(key=lambda x: x["similarity"], reverse=True)
-    
-    # Only return necessary fields to the LLM
+
     final_results = []
     for r in results[:top_k]:
-        final_results.append({
-            "source": f"{r['filename']} > {r['heading']}",
-            "metadata": r["metadata"],
-            "content": r["content"]
-        })
-        
+        final_results.append(
+            {
+                "source": f"{r['filename']} > {r['heading']}",
+                "metadata": r["metadata"],
+                "content": r["content"],
+                "similarity": round(r["similarity"], 4),
+            }
+        )
+
     return final_results
