@@ -11,7 +11,18 @@ User messages go through a Groq chat model with two tools: `retrieve_policy` and
 - **Chat model:** `llama-3.3-70b-versatile` on Groq (override with `GROQ_MODEL`).
 - **Embeddings:** `gemini-embedding-2` (indexing and retrieval only).
 - **Framework:** Vanilla Python (`groq` + `google-genai`). No LangChain.
-- **Index:** `index.json` (numpy vectors). Active `+0.05`, legacy/superseded/draft `-0.05`.
+- **Index:** derived `data/index.json` (numpy vectors). Active `+0.05`, legacy/superseded/draft `-0.05`.
+
+## Project structure
+
+```text
+src/aster_row_support/  Reusable agent, tools, and evaluation helpers
+scripts/                CLI, indexer, and behavior evaluation entry points
+tests/                  Deterministic regression tests
+data/                   Order data and generated retrieval index
+knowledge-base/         Supplied Markdown policy and product documents
+evaluation/             Visible and custom behavior cases
+```
 
 ## Setup
 
@@ -32,13 +43,13 @@ Set in `.env`:
 - `GROQ_MODEL` — optional; default `llama-3.3-70b-versatile`
 
 ```bash
-python indexer.py
+python scripts/indexer.py
 ```
 
 ## Run
 
 ```bash
-python cli.py
+python scripts/cli.py
 ```
 
 The CLI prints the answer, retrieved sources, and a handoff flag when human help is recommended. Traces go to `agent_trace.log` (user message, conversation history, retrieved passages with metadata and scores, sanitized tool results, final response, errors/handoffs).
@@ -48,13 +59,13 @@ The CLI prints the answer, retrieved sources, and a handoff flag when human help
 Deterministic tests (no LLM):
 
 ```bash
-pytest test_tools.py test_eval_checks.py -q
+pytest -q
 ```
 
 Behavior evaluation against all 15 visible cases plus 5 custom cases:
 
 ```bash
-python evaluate.py
+python scripts/evaluate.py
 ```
 
 The suite prints each case, then totals by category (`retrieval`, `conversation`, `tool-use`, `privacy`, and so on). It writes `eval_results.json`. Assertions are deterministic: required/forbidden strings, sources, tool names, tool arguments, refusals, conflict surfacing, and abstention. Another LLM is not used to grade.

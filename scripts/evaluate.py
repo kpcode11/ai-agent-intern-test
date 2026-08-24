@@ -2,16 +2,21 @@ import glob
 import json
 import sys
 import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 if sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 
-from agent import Agent
-from eval_checks import check_expect, load_cases
+from aster_row_support.agent import Agent
+from aster_row_support.eval_checks import check_expect, load_cases
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def run_evaluation():
-    cases = load_cases(sorted(glob.glob("evaluation/*.json")))
+    cases = load_cases(sorted(glob.glob(str(PROJECT_ROOT / "evaluation" / "*.json"))))
     results = {
         "total": len(cases),
         "passed": 0,
@@ -79,7 +84,7 @@ def run_evaluation():
     for cat, stats in results["categories"].items():
         print(f"{cat}: {stats['passed']}/{stats['total']} passed")
 
-    with open("eval_results.json", "w", encoding="utf-8") as f:
+    with (PROJECT_ROOT / "eval_results.json").open("w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
 

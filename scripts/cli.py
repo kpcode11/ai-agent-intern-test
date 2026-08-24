@@ -1,7 +1,11 @@
-from agent import Agent
-from dotenv import load_dotenv
-from eval_checks import detect_handoff
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from aster_row_support.agent import Agent
+from dotenv import load_dotenv
+from aster_row_support.eval_checks import detect_handoff
 
 if sys.stdout.encoding.lower() != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")

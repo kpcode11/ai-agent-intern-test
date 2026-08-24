@@ -1,9 +1,11 @@
 import json
 import re
+from pathlib import Path
 
 import numpy as np
 
 _INDEX_CACHE = None
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 CUSTOMER_SAFE_FIELDS = {
     "order_id",
@@ -33,7 +35,7 @@ def get_order_status(order_id: str) -> dict:
 
     order_id = re.sub(r"[^A-Za-z0-9-]", "", order_id.strip()).upper()
     try:
-        with open("data/orders.json", "r", encoding="utf-8") as f:
+        with (PROJECT_ROOT / "data" / "orders.json").open("r", encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         return {"error": "Order database not found. Cannot look up orders."}
@@ -46,10 +48,12 @@ def get_order_status(order_id: str) -> dict:
                 items.append({key: item.get(key) for key in ITEM_SAFE_FIELDS if key in item})
             safe_order["items"] = items
 
+            # Avoid reporting stale delivery fields for cancelled or returned orders
             if safe_order.get("status") in ["cancelled", "returned"]:
                 safe_order["carrier"] = None
                 safe_order["tracking_number"] = None
                 safe_order["estimated_delivery"] = None
+                safe_order["delivered_at"] = None
 
             return safe_order
 
@@ -64,7 +68,7 @@ def search_knowledge_base(query: str, client, top_k: int = 5) -> list:
     global _INDEX_CACHE
     if _INDEX_CACHE is None:
         try:
-            with open("index.json", "r", encoding="utf-8") as f:
+            with (PROJECT_ROOT / "data" / "index.json").open("r", encoding="utf-8") as f:
                 _INDEX_CACHE = json.load(f)
         except FileNotFoundError:
             return [{"error": "Knowledge base index not found. Please notify the system administrator."}]

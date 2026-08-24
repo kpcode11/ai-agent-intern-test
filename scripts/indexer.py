@@ -3,12 +3,14 @@ import json
 import glob
 import yaml
 import re
+from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 
 load_dotenv()
 
 client = genai.Client()
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def chunk_markdown(content, filename):
     parts = re.split(r'\n## ', '\n' + content)
@@ -33,7 +35,9 @@ def chunk_markdown(content, filename):
             
     return chunks
 
-def index_knowledge_base(kb_dir="knowledge-base", output_file="index.json"):
+def index_knowledge_base(kb_dir=None, output_file=None):
+    kb_dir = kb_dir or str(PROJECT_ROOT / "knowledge-base")
+    output_file = output_file or str(PROJECT_ROOT / "data" / "index.json")
     documents = []
     
     for filepath in glob.glob(os.path.join(kb_dir, "*.md")):

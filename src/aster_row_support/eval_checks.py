@@ -139,7 +139,8 @@ def source_haystack(trace: dict, response: str) -> str:
 
 def check_expect(expect: dict, response: str, trace: dict) -> list[str]:
     failures: list[str] = []
-    text = (response or "").replace("\u2011", "-")
+    text = (response or "").replace("\u2011", "-").replace("\u202f", " ").replace("\u00a0", " ")
+    text = text.replace("\u2019", "'").replace("\u2018", "'").replace("\u201c", '"').replace("\u201d", '"')
     tools_called = [t.get("name") for t in trace.get("tools_called", [])]
 
     for required in expect.get("must_include", []):

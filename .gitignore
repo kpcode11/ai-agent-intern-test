@@ -4,6 +4,7 @@
 # Project specifics
 .env
 index.json
+data/index.json
 *.log
 eval_results.json
 agent_demo*.jpg

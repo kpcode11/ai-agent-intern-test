@@ -1,5 +1,5 @@
-from tools import get_order_status, search_knowledge_base
-import tools
+from aster_row_support.tools import get_order_status, search_knowledge_base
+import aster_row_support.tools as tools
 
 
 def test_get_order_status_valid():
