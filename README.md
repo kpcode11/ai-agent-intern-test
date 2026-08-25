@@ -54,6 +54,14 @@ python scripts/cli.py
 
 The CLI prints the answer, retrieved sources, and a handoff flag when human help is recommended. Traces go to `agent_trace.log` (user message, conversation history, retrieved passages with metadata and scores, sanitized tool results, final response, errors/handoffs).
 
+### Web UI
+
+```bash
+streamlit run scripts/app.py
+```
+
+Opens the same agent in a browser-based chat interface.
+
 ## Tests and evaluation
 
 Deterministic tests (no LLM):
