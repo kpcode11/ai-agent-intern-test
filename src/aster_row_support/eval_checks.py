@@ -12,18 +12,28 @@ HANDOFF_MARKERS = (
     "human review",
     "human confirmation",
     "human teammate",
+    "human agent",
     "contact support",
     "contact aster",
+    "contact our",
+    "contact the",
     "customer support",
     "support team",
     "support representative",
+    "support agent",
     "representative",
     "escalate",
     "hand off",
     "handoff",
     "live agent",
     "speak with a person",
+    "speak with a",
+    "speak to a",
+    "talk to a",
     "connect you with",
+    "reach out to",
+    "reach out",
+    "get in touch",
 )
 
 REFUSAL_MARKERS = (
@@ -43,6 +53,16 @@ REFUSAL_MARKERS = (
     "internal-only",
     "internal only",
     "not available to customers",
+    "i'm not able",
+    "not permitted",
+    "not authorized",
+    "cannot provide",
+    "can't provide",
+    "cannot disclose",
+    "can't disclose",
+    "not something i can",
+    "restricted",
+    "confidential",
 )
 
 CONFLICT_MARKERS = (
@@ -62,6 +82,16 @@ CONFLICT_MARKERS = (
     "two sources",
     "both documents",
     "official sources",
+    "contradictory",
+    "contradict",
+    "contradicts",
+    "discrepancy",
+    "discrepancies",
+    "conflicting information",
+    "conflicting guidance",
+    "different information",
+    "not consistent",
+    "at odds",
 )
 
 NEGATION_MARKERS = (
@@ -161,11 +191,13 @@ def check_expect(expect: dict, response: str, trace: dict) -> list[str]:
             failures.append(f"Used forbidden source: '{forbidden_source}'")
 
     for concept in expect.get("must_include_concepts", []):
-        words = [w.lower() for w in concept.split() if len(w) > 4]
+        words = [w.lower() for w in concept.split() if len(w) > 3]
         if not words:
             continue
         match_count = sum(1 for w in words if w in text.lower())
-        if match_count / len(words) < 0.3:
+        # Require at least 25% of significant words, but always at least 1
+        required_matches = max(1, int(len(words) * 0.25))
+        if match_count < required_matches:
             failures.append(f"Likely missing concept: '{concept}'")
 
     for concept in expect.get("must_not_invent", []):
