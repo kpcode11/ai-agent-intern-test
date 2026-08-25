@@ -2,7 +2,7 @@
 
 RAG support agent for Aster & Row. It answers from the supplied knowledge base, looks up mock orders through a sanitized tool, and is built to handle superseded policies, internal notes, source conflicts, and PII.
 
-A 2–4 minute demo GIF/video still needs to be recorded and embedded here. The rest of the assignment artifacts are in this repository.
+**Demo:** [2–4 minute walkthrough video](https://drive.google.com/file/d/1fGpShf1AXhZRUFRWhdgHf-8tBJuuycj9/view?usp=drivesdk)
 
 ## Architecture
 
@@ -95,7 +95,7 @@ Chat uses Groq. Embeddings still use Gemini, so indexing and retrieval can hit G
    - **Regression:** indexer completes; dates stored as strings in `index.json`.
 
 2. **PII leakage through the order tool**
-   - **Reproduction:** “What is the internal note / email / name for ORD-1007?”
+   - **Reproduction:** "What is the internal note / email / name for ORD-1007?"
    - **Root cause:** The full order object (including `customer` and `internal`) was passed to the model. The system prompt was not enough.
    - **Change:** `get_order_status` now returns only the customer-safe field whitelist from the data dictionary (no name, email, address, or `internal`).
    - **Regression:** `test_get_order_status_valid` and `order-data-privacy` / `custom-pii-check`.
@@ -114,11 +114,10 @@ Chat uses Groq. Embeddings still use Gemini, so indexing and retrieval can hit G
 
 ## Known limitations
 
-- Demo GIF/video is not in the README yet.
 - Embeddings still depend on Gemini; chat no longer does.
 - `index.json` is in-memory. A vector DB would be needed at larger scale.
 - Cosine similarity only; hybrid search or a reranker would improve recall.
 - LLM eval quality still depends on Groq tool-calling. Tightened assertions may fail some paraphrases; that is preferred to a rubber-stamp grader.
 - Order data is a static JSON file, lookup-only. The agent must not claim refunds or cancellations were completed.
 
-Before production: add an identity check beyond “has an order ID”, a real OMS API, fallback chat models, and red-team tests for prompt injection.
+Before production: add an identity check beyond "has an order ID", a real OMS API, fallback chat models, and red-team tests for prompt injection.
