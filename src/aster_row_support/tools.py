@@ -60,7 +60,7 @@ def get_order_status(order_id: str) -> dict:
     return {"error": f"Order {order_id} not found."}
 
 
-def search_knowledge_base(query: str, client, top_k: int = 5) -> list:
+def search_knowledge_base(query: str, client, top_k: int = 8) -> list:
     """
     Embeds the query and searches the in-memory index for relevant policy chunks.
     Boosts active documents over legacy ones and excludes internal-only docs.

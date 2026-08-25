@@ -1,5 +1,6 @@
 import glob
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -25,7 +26,13 @@ def run_evaluation():
         "categories": {},
     }
 
-    for case in cases:
+    delay = int(os.environ.get("EVAL_DELAY_SECONDS", "2"))
+
+    for idx, case in enumerate(cases):
+        if idx > 0 and delay > 0:
+            print(f"(waiting {delay}s for rate limit...)")
+            time.sleep(delay)
+
         print(f"\n--- Running Case: {case['id']} ({case.get('category', 'uncategorized')}) ---")
         agent = Agent()
 
@@ -37,9 +44,10 @@ def run_evaluation():
                     final_response = agent.send_message(msg["content"])
                     break
                 except Exception as e:
+                    wait_time = min(30 * (attempt + 1), 120)
                     if attempt < 9:
-                        print(f"API Error: {e}. Retrying in 15s...")
-                        time.sleep(15)
+                        print(f"API Error: {e}. Retrying in {wait_time}s... (attempt {attempt+1}/10)")
+                        time.sleep(wait_time)
                     else:
                         raise
             print(f"Agent: {final_response}")
